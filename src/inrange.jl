@@ -21,7 +21,8 @@ function inrange(tree::NNTree,
     return idxs
 end
 
-function inrange_point!(tree, point, radius, sortres, idx)
+function inrange_point!(tree, point, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
+                        avoidance_dist::Integer, radius, sortres, idx)
     _inrange(tree, point, radius, idx)
     if tree.reordered
         @inbounds for j in 1:length(idx)
@@ -32,15 +33,17 @@ function inrange_point!(tree, point, radius, sortres, idx)
     return
 end
 
-function inrange(tree::NNTree{V}, point::AbstractVector{T}, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
+                 avoidance_dist::Integer, radius::Number, sortres=false) where {V, T <: Number}
     check_input(tree, point)
     check_radius(radius)
     idx = Int[]
-    inrange_point!(tree, point, radius, sortres, idx)
+    inrange_point!(tree, point, time_of_this_event, event_times, avoidance_dist, radius, sortres, idx)
     return idx
 end
 
-function inrange(tree::NNTree{V}, point::AbstractMatrix{T}, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, point::AbstractMatrix{T}, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
+                 avoidance_dist::Integer, radius::Number, sortres=false) where {V, T <: Number}
     dim = size(point, 1)
     npoints = size(point, 2)
     if isbitstype(T)

@@ -92,12 +92,19 @@ end
 # Uses a heap for fast insertion.
 @inline function add_points_knn!(best_dists::Vector, best_idxs::Vector{Int},
                                  tree::NNTree, index::Int, point::AbstractVector,
+                                 time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                                 event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+                                 avoidance_dist::Integer,
                                  do_end::Bool, skip::F) where {F}
     for z in get_leaf_range(tree.tree_data, index)
         @POINT 1
         idx = tree.reordered ? z : tree.indices[z]
         dist_d = evaluate(tree.metric, tree.data[idx], point, do_end)
-        if dist_d <= best_dists[1]
+        # <David Shorten> add check that the histories do not overlap
+        if (dist_d <= best_dists[1]) &&
+            !(((event_times[idx] < time_of_this_event) && (event_times[idx] > history_start_of_this_event)) ||
+              ((history_start_times[idx] < time_of_this_event) && (history_start_times[idx] > history_start_of_this_event)))
+
             if skip(tree.indices[z])
                 continue
             end
@@ -116,12 +123,17 @@ end
 # This will probably prevent SIMD and other optimizations so some care is needed
 # to evaluate if it is worth it.
 @inline function add_points_inrange!(idx_in_ball::Vector{Int}, tree::NNTree,
-                                     index::Int, point::AbstractVector, r::Number, do_end::Bool)
+                                     index::Int, point::AbstractVector,
+                                     time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                                     event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+                                     r::Number, do_end::Bool)
     for z in get_leaf_range(tree.tree_data, index)
         @POINT 1
         idx = tree.reordered ? z : tree.indices[z]
         dist_d = evaluate(tree.metric, tree.data[idx], point, do_end)
-        if dist_d <= r
+        if (dist_d <= r) &&
+            !(((event_times[idx] < time_of_this_event) && (event_times[idx] > history_start_of_this_event)) ||
+              ((history_start_times[idx] < time_of_this_event) && (history_start_times[idx] > history_start_of_this_event)))
             push!(idx_in_ball, idx)
         end
     end

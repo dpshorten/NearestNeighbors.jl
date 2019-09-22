@@ -12,22 +12,24 @@ in the `tree`. If `sortres = true` the result is sorted such that the results ar
 in the order of increasing distance to the point. `skip` is an optional predicate
 to determine if a point that would be returned should be skipped.
 """
-function knn(tree::NNTree{V}, points::Vector{T}, k::Int, sortres=false, skip::Function=always_false) where {V, T <: AbstractVector}
+function knn(tree::NNTree{V}, points::Vector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+             event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat}, k::Int, sortres=false, skip::Function=always_false) where {V, T <: AbstractVector}
     check_input(tree, points)
     check_k(tree, k)
     n_points = length(points)
      dists = [Vector{get_T(eltype(V))}(undef, k) for _ in 1:n_points]
      idxs = [Vector{Int}(undef, k) for _ in 1:n_points]
     for i in 1:n_points
-        knn_point!(tree, points[i], sortres, dists[i], idxs[i], skip)
+        knn_point!(tree, points[i], time_of_this_event, event_times, avoidance_dist, sortres, dists[i], idxs[i], skip)
     end
     return idxs, dists
 end
 
-function knn_point!(tree::NNTree{V}, point::AbstractVector{T}, sortres, dist, idx, skip) where {V, T <: Number}
+function knn_point!(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                    event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},sortres, dist, idx, skip) where {V, T <: Number}
     fill!(idx, -1)
     fill!(dist, typemax(get_T(eltype(V))))
-    _knn(tree, point, idx, dist, skip)
+    _knn(tree, point, time_of_this_event, event_times, avoidance_dist, idx, dist, skip)
     sortres && heap_sort_inplace!(dist, idx)
     if tree.reordered
         for j in eachindex(idx)
@@ -36,11 +38,12 @@ function knn_point!(tree::NNTree{V}, point::AbstractVector{T}, sortres, dist, id
     end
 end
 
-function knn(tree::NNTree{V}, point::AbstractVector{T}, k::Int, sortres=false, skip::Function=always_false) where {V, T <: Number}
+function knn(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
+             avoidance_dist::Integer, k::Int, sortres=false, skip::Function=always_false) where {V, T <: Number}
     check_k(tree, k)
     idx = Vector{Int}(undef, k)
     dist = Vector{get_T(eltype(V))}(undef, k)
-    knn_point!(tree, point, sortres, dist, idx, skip)
+    knn_point!(tree, point, time_of_this_event, event_times, avoidance_dist, sortres, dist, idx, skip)
     return idx, dist
 end
 

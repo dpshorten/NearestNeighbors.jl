@@ -21,9 +21,9 @@ function inrange(tree::NNTree,
     return idxs
 end
 
-function inrange_point!(tree, point, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
-                        avoidance_dist::Integer, radius, sortres, idx)
-    _inrange(tree, point, radius, idx)
+function inrange_point!(tree, point, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                        event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},radius, sortres, idx)
+    _inrange(tree, point,  time_of_this_event, history_start_of_this_event, event_times, history_start_times, radius, idx)
     if tree.reordered
         @inbounds for j in 1:length(idx)
             idx[j] = tree.indices[idx[j]]
@@ -33,17 +33,19 @@ function inrange_point!(tree, point, time_of_this_event::AbstractFloat, event_ti
     return
 end
 
-function inrange(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
-                 avoidance_dist::Integer, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                 event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
+                 radius::Number, sortres=false) where {V, T <: Number}
     check_input(tree, point)
     check_radius(radius)
     idx = Int[]
-    inrange_point!(tree, point, time_of_this_event, event_times, avoidance_dist, radius, sortres, idx)
+    inrange_point!(tree, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times, radius, sortres, idx)
     return idx
 end
 
-function inrange(tree::NNTree{V}, point::AbstractMatrix{T}, time_of_this_event::AbstractFloat, event_times::Vector{AbstractFloat},
-                 avoidance_dist::Integer, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, point::AbstractMatrix{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                 event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
+                 radius::Number, sortres=false) where {V, T <: Number}
     dim = size(point, 1)
     npoints = size(point, 2)
     if isbitstype(T)

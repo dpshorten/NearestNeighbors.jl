@@ -143,14 +143,14 @@ end
 function _knn(tree::KDTree,
               point::AbstractVector,
               time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-              event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+              event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
               best_idxs::Vector{Int},
               best_dists::Vector,
               skip::Function)
 
     init_min = get_min_distance(tree.hyper_rec, point)
-    knn_kernel!(tree, 1, point, time_of_this_event, event_times,
-                avoidance_dist, best_idxs, best_dists, init_min, skip)
+    knn_kernel!(tree, 1, point, time_of_this_event, history_start_of_this_event, event_times,
+                history_start_times, best_idxs, best_dists, init_min, skip)
     @simd for i in eachindex(best_dists)
         @inbounds best_dists[i] = eval_end(tree.metric, best_dists[i])
     end
@@ -161,7 +161,7 @@ function knn_kernel!(tree::KDTree{V},
                      index::Int,
                      point::AbstractVector,
                      time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                     event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+                     event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                      best_idxs::Vector{Int},
                      best_dists::Vector,
                      min_dist,
@@ -169,8 +169,8 @@ function knn_kernel!(tree::KDTree{V},
     @NODE 1
     # At a leaf node. Go through all points in node and add those in range
     if isleaf(tree.tree_data.n_internal_nodes, index)
-        add_points_knn!(best_dists, best_idxs, tree, index, point, time_of_this_event, event_times,
-                        avoidance_dist, false, skip)
+        add_points_knn!(best_dists, best_idxs, tree, index, point, time_of_this_event,
+                        history_start_of_this_event, event_times, history_start_times, false, skip)
         return
     end
 
@@ -192,16 +192,15 @@ function knn_kernel!(tree::KDTree{V},
         ddiff = max(zero(eltype(V)), lo - p_dim)
     end
     # Always call closer sub tree
-    knn_kernel!(tree, close, point, time_of_this_event, event_times,
-                avoidance_dist, best_idxs, best_dists, min_dist, skip)
+    knn_kernel!(tree, close, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times, best_idxs, best_dists, min_dist, skip)
 
     split_diff_pow = eval_pow(M, split_diff)
     ddiff_pow = eval_pow(M, ddiff)
     diff_tot = eval_diff(M, split_diff_pow, ddiff_pow)
     new_min = eval_reduce(M, min_dist, diff_tot)
     if new_min < best_dists[1]
-        knn_kernel!(tree, far, point, time_of_this_event, event_times,
-                    avoidance_dist, best_idxs, best_dists, new_min, skip)
+        knn_kernel!(tree, far, point, time_of_this_event, history_start_of_this_event, event_times,
+                    history_start_times, best_idxs, best_dists, new_min, skip)
     end
     return
 end
@@ -209,12 +208,12 @@ end
 function _inrange(tree::KDTree,
                   point::AbstractVector,
                   time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                  event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+                  event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                   radius::Number,
                   idx_in_ball = Int[])
     init_min = get_min_distance(tree.hyper_rec, point)
-    inrange_kernel!(tree, 1, point, time_of_this_event, event_times,
-                    avoidance_dist, eval_op(tree.metric, radius, zero(init_min)), idx_in_ball,
+    inrange_kernel!(tree, 1, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times,
+                    eval_op(tree.metric, radius, zero(init_min)), idx_in_ball,
                     init_min)
     return
 end
@@ -224,7 +223,7 @@ function inrange_kernel!(tree::KDTree,
                          index::Int,
                          point::AbstractVector,
                          time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                         event_times::Vector{AbstractFloat}, history_start_times::Vector{AbstractFloat},
+                         event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                          r::Number,
                          idx_in_ball::Vector{Int},
                          min_dist)
@@ -236,8 +235,8 @@ function inrange_kernel!(tree::KDTree,
 
     # At a leaf node. Go through all points in node and add those in range
     if isleaf(tree.tree_data.n_internal_nodes, index)
-        add_points_inrange!(idx_in_ball, tree, index, point, time_of_this_event, event_times,
-                    avoidance_dist, r, false)
+        add_points_inrange!(idx_in_ball, tree, index, point, time_of_this_event,
+                            history_start_of_this_event, event_times, history_start_times, r, false)
         return
     end
 
@@ -259,8 +258,8 @@ function inrange_kernel!(tree::KDTree,
         ddiff = max(zero(lo - p_dim), lo - p_dim)
     end
     # Call closer sub tree
-    inrange_kernel!(tree, close, point, time_of_this_event, event_times,
-                    avoidance_dist, r, idx_in_ball, min_dist)
+    inrange_kernel!(tree, close, point, time_of_this_event, history_start_of_this_event,
+                    event_times, history_start_times, r, idx_in_ball, min_dist)
 
     # TODO: We could potentially also keep track of the max distance
     # between the point and the hyper rectangle and add the whole sub tree
@@ -272,6 +271,6 @@ function inrange_kernel!(tree::KDTree,
     ddiff_pow = eval_pow(M, ddiff)
     diff_tot = eval_diff(M, split_diff_pow, ddiff_pow)
     new_min = eval_reduce(M, min_dist, diff_tot)
-    inrange_kernel!(tree, far, point, time_of_this_event, event_times,
-                    avoidance_dist, r, idx_in_ball, new_min)
+    inrange_kernel!(tree, far, point, time_of_this_event, history_start_of_this_event,
+                    event_times, history_start_times, r, idx_in_ball, new_min)
 end

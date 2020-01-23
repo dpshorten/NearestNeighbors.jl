@@ -229,9 +229,9 @@ function inrange_kernel!(tree::KDTree,
                          min_dist)
     @NODE 1
     # Point is outside hyper rectangle, skip the whole sub tree
-    if min_dist > r
-        return
-    end
+    #if min_dist > r
+     #   return
+    #end
 
     # At a leaf node. Go through all points in node and add those in range
     if isleaf(tree.tree_data.n_internal_nodes, index)

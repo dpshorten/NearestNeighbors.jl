@@ -28,13 +28,13 @@ end
 
 Creates a `BallTree` from the data using the given `metric` and `leafsize`.
 """
-function BallTree(data::Vector{V},
+function BallTree(data::Array{AbstractFloat, 2},
                   metric::M = Euclidean();
                   leafsize::Int = 10,
                   reorder::Bool = true,
                   storedata::Bool = true,
                   reorderbuffer::Vector{V} = Vector{V}()) where {V <: AbstractArray, M <: Metric}
-    reorder = !isempty(reorderbuffer) || (storedata ? reorder : false)
+    #reorder = !isempty(reorderbuffer) || (storedata ? reorder : false)
 
     tree_data = TreeData(data, leafsize)
     n_d = length(V)
@@ -46,18 +46,18 @@ function BallTree(data::Vector{V},
     # Bottom up creation of hyper spheres so need spheres even for leafs)
     hyper_spheres = Vector{HyperSphere{length(V),eltype(V)}}(undef, tree_data.n_internal_nodes + tree_data.n_leafs)
 
-    if reorder
-        indices_reordered = Vector{Int}(undef, n_p)
-        if isempty(reorderbuffer)
-            data_reordered = Vector{V}(undef, n_p)
-        else
-            data_reordered = reorderbuffer
-        end
-    else
+    # if reorder
+    #     indices_reordered = Vector{Int}(undef, n_p)
+    #     if isempty(reorderbuffer)
+    #         data_reordered = Vector{V}(undef, n_p)
+    #     else
+    #         data_reordered = reorderbuffer
+    #     end
+    # else
         # Dummy variables
-        indices_reordered = Vector{Int}()
-        data_reordered = Vector{V}()
-    end
+    indices_reordered = Vector{Int}()
+    data_reordered = Vector{V}()
+    #end
 
     if n_p > 0
         # Call the recursive BallTree builder
@@ -73,7 +73,7 @@ function BallTree(data::Vector{V},
     BallTree(storedata ? data : similar(data, 0), hyper_spheres, indices, metric, tree_data, reorder)
 end
 
- function BallTree(data::Matrix{T},
+ function BallTree(data::Array{T, 2},
                   metric::M = Euclidean();
                   leafsize::Int = 10,
                   storedata::Bool = true,
@@ -81,19 +81,18 @@ end
                   reorderbuffer::Matrix{T} = Matrix{T}(undef, 0, 0)) where {T <: AbstractFloat, M <: Metric}
     dim = size(data, 1)
     npoints = size(data, 2)
-    points = copy_svec(T, data, Val(dim))
-    if isempty(reorderbuffer)
-        reorderbuffer_points = Vector{SVector{dim,T}}()
-    else
-        reorderbuffer_points = copy_svec(T, reorderbuffer, Val(dim))
-    end
-    BallTree(points, metric, leafsize = leafsize, storedata = storedata, reorder = reorder,
-            reorderbuffer = reorderbuffer_points)
+    #points = copy_svec(T, data, Val(dim))
+    #if isempty(reorderbuffer)
+     #   reorderbuffer_points = Vector{SVector{dim,T}}()
+    #else
+     #   reorderbuffer_points = copy_svec(T, reorderbuffer, Val(dim))
+    #end
+    BallTree(data, metric, leafsize = leafsize, storedata = storedata, reorder = reorder)
 end
 
 # Recursive function to build the tree.
 function build_BallTree(index::Int,
-                        data::Vector{V},
+                        data::Array{T, 3},
                         data_reordered::Vector{V},
                         hyper_spheres::Vector{HyperSphere{N,T}},
                         metric::Metric,
@@ -142,23 +141,31 @@ end
 
 function _knn(tree::BallTree,
               point::AbstractVector,
+              time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+              event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
               best_idxs::Vector{Int},
               best_dists::Vector,
               skip::Function)
-    knn_kernel!(tree, 1, point, best_idxs, best_dists, skip)
+    knn_kernel!(tree, 1, point, time_of_this_event, history_start_of_this_event, event_times,
+                history_start_times, best_idxs, best_dists, skip)
     return
 end
 
 
 function knn_kernel!(tree::BallTree{V},
-                           index::Int,
-                           point::AbstractArray,
-                           best_idxs::Vector{Int},
-                           best_dists::Vector,
-                           skip::F) where {V, F}
+                     index::Int,
+                     point::AbstractArray,
+                     time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                     event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
+                     best_idxs::Vector{Int},
+                     best_dists::Vector,
+                     skip::F) where {V, F}
     @NODE 1
     if isleaf(tree.tree_data.n_internal_nodes, index)
-        add_points_knn!(best_dists, best_idxs, tree, index, point, true, skip)
+        add_points_knn!(best_dists, best_idxs, tree, index, point,
+                        time_of_this_event, history_start_of_this_event, event_times,
+                        history_start_times,
+                        true, skip)
         return
     end
 
@@ -170,14 +177,26 @@ function knn_kernel!(tree::BallTree{V},
 
     if left_dist <= best_dists[1] || right_dist <= best_dists[1]
         if left_dist < right_dist
-            knn_kernel!(tree, getleft(index), point, best_idxs, best_dists, skip)
+            knn_kernel!(tree, getleft(index), point,
+                        time_of_this_event, history_start_of_this_event, event_times,
+                        history_start_times,
+                        best_idxs, best_dists, skip)
             if right_dist <=  best_dists[1]
-                 knn_kernel!(tree, getright(index), point, best_idxs, best_dists, skip)
+                knn_kernel!(tree, getright(index), point,
+                            time_of_this_event, history_start_of_this_event, event_times,
+                            history_start_times,
+                            best_idxs, best_dists, skip)
              end
         else
-            knn_kernel!(tree, getright(index), point, best_idxs, best_dists, skip)
+            knn_kernel!(tree, getright(index), point,
+                        time_of_this_event, history_start_of_this_event, event_times,
+                        history_start_times,
+                        best_idxs, best_dists, skip)
             if left_dist <=  best_dists[1]
-                 knn_kernel!(tree, getleft(index), point, best_idxs, best_dists, skip)
+                knn_kernel!(tree, getleft(index), point,
+                            time_of_this_event, history_start_of_this_event, event_times,
+                            history_start_times,
+                            best_idxs, best_dists, skip)
             end
         end
     end
@@ -186,16 +205,23 @@ end
 
 function _inrange(tree::BallTree{V},
                   point::AbstractVector,
+                  time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                  event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                   radius::Number,
                   idx_in_ball::Vector{Int}) where {V}
     ball = HyperSphere(convert(V, point), convert(eltype(V), radius))  # The "query ball"
-    inrange_kernel!(tree, 1, point, ball, idx_in_ball)  # Call the recursive range finder
+    inrange_kernel!(tree, 1, point,
+                    time_of_this_event, history_start_of_this_event, event_times,
+                    history_start_times,
+                    ball, idx_in_ball)  # Call the recursive range finder
     return
 end
 
 function inrange_kernel!(tree::BallTree,
                          index::Int,
                          point::AbstractVector,
+                         time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
+                         event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                          query_ball::HyperSphere,
                          idx_in_ball::Vector{Int})
     @NODE 1
@@ -214,7 +240,10 @@ function inrange_kernel!(tree::BallTree,
 
     # At a leaf node, check all points in the leaf node
     if isleaf(tree.tree_data.n_internal_nodes, index)
-        add_points_inrange!(idx_in_ball, tree, index, point, query_ball.r, true)
+        add_points_inrange!(idx_in_ball, tree, index, point,
+                            time_of_this_event, history_start_of_this_event, event_times,
+                            history_start_times,
+                            query_ball.r, true)
         return
     end
 
@@ -224,7 +253,13 @@ function inrange_kernel!(tree::BallTree,
          addall(tree, index, idx_in_ball)
     else
         # Recursively call the left and right sub tree.
-        inrange_kernel!(tree,  getleft(index), point, query_ball, idx_in_ball)
-        inrange_kernel!(tree, getright(index), point, query_ball, idx_in_ball)
+        inrange_kernel!(tree,  getleft(index), point,
+                        time_of_this_event, history_start_of_this_event, event_times,
+                        history_start_times,
+                        query_ball, idx_in_ball)
+        inrange_kernel!(tree, getright(index), point,
+                        time_of_this_event, history_start_of_this_event, event_times,
+                        history_start_times,
+                        query_ball, idx_in_ball)
     end
 end

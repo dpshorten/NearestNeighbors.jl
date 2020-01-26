@@ -132,8 +132,8 @@ end
         @POINT 1
         idx = tree.reordered ? z : tree.indices[z]
         dist_d = evaluate(tree.metric, tree.data[idx], point, do_end)
-        if (dist_d <= r)# &&
-            #!((event_times[idx] >= history_start_of_this_event) && (history_start_times[idx] <= time_of_this_event))
+        if (dist_d <= r) &&
+            !((event_times[idx] >= history_start_of_this_event - 1e-9) && (history_start_times[idx] <= time_of_this_event + 1e-9))
             #println("less")
             push!(idx_in_ball, idx)
         end

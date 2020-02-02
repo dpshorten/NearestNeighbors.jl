@@ -211,7 +211,8 @@ function _inrange(tree::KDTree,
                   event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
                   radius::Number,
                   idx_in_ball = Int[])
-    init_min = get_min_distance(tree.hyper_rec, point)
+    #init_min = get_min_distance(tree.hyper_rec, point)
+    init_min = 0
     inrange_kernel!(tree, 1, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times,
                     eval_op(tree.metric, radius, zero(init_min)), idx_in_ball,
                     init_min)
@@ -229,9 +230,9 @@ function inrange_kernel!(tree::KDTree,
                          min_dist)
     @NODE 1
     # Point is outside hyper rectangle, skip the whole sub tree
-    #if min_dist > r
-     #   return
-    #end
+    if min_dist > r
+        return
+    end
 
     # At a leaf node. Go through all points in node and add those in range
     if isleaf(tree.tree_data.n_internal_nodes, index)

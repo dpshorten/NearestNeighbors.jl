@@ -12,25 +12,56 @@ in the `tree`. If `sortres = true` the result is sorted such that the results ar
 in the order of increasing distance to the point. `skip` is an optional predicate
 to determine if a point that would be returned should be skipped.
 """
-function knn(tree::NNTree{V}, points::Vector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-             event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat}, k::Int, sortres=false, skip::Function=always_false) where {V, T <: AbstractVector}
+function knn(
+    tree::NNTree{V},
+    points::Vector{T},
+    exclusion_windows_of_this_event::Array{<:AbstractFloat},
+    exclusion_windows::Array{<:AbstractFloat},
+    k::Int,
+    sortres = false,
+    skip::Function = always_false,
+) where {V,T<:AbstractVector}
     check_input(tree, points)
     check_k(tree, k)
     n_points = length(points)
-     dists = [Vector{get_T(eltype(V))}(undef, k) for _ in 1:n_points]
-     idxs = [Vector{Int}(undef, k) for _ in 1:n_points]
-    for i in 1:n_points
-        knn_point!(tree, points[i], time_of_this_event, history_start_of_this_event, event_times, history_start_times, sortres, dists[i], idxs[i], skip)
+    dists = [Vector{get_T(eltype(V))}(undef, k) for _ = 1:n_points]
+    idxs = [Vector{Int}(undef, k) for _ = 1:n_points]
+    for i = 1:n_points
+        knn_point!(
+            tree,
+            points[i],
+            exclusion_windows_of_this_event,
+            exclusion_windows,
+            sortres,
+            dists[i],
+            idxs[i],
+            skip,
+        )
     end
     return idxs, dists
 end
 
-function knn_point!(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                    event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
-                    sortres, dist, idx, skip) where {V, T <: Number}
+function knn_point!(
+    tree::NNTree{V},
+    point::AbstractVector{T},
+    exclusion_windows_of_this_event::Array{<:AbstractFloat},
+    exclusion_windows::Array{<:AbstractFloat},
+    sortres,
+    dist,
+    idx,
+    skip,
+) where {V,T<:Number}
     fill!(idx, -1)
     fill!(dist, typemax(get_T(eltype(V))))
-    _knn(tree, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times, idx, dist, skip)
+    _knn(
+        tree,
+        point,
+        exclusion_windows_of_this_event,
+        exclusion_windows,
+        idx,
+        dist,
+        skip,
+    )
     sortres && heap_sort_inplace!(dist, idx)
     if tree.reordered
         for j in eachindex(idx)
@@ -39,23 +70,44 @@ function knn_point!(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_even
     end
 end
 
-function knn(tree::NNTree{V}, point::AbstractVector{T}, time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-             event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat}, k::Int,
-             sortres=false, skip::Function=always_false) where {V, T <: Number}
+function knn(
+    tree::NNTree{V},
+    point::AbstractVector{T},
+    exclusion_windows_of_this_event::Array{<:AbstractFloat},
+    exclusion_windows::Array{<:AbstractFloat},
+    k::Int,
+    sortres = false,
+    skip::Function = always_false,
+) where {V,T<:Number}
     check_k(tree, k)
     idx = Vector{Int}(undef, k)
     dist = Vector{get_T(eltype(V))}(undef, k)
-    knn_point!(tree, point, time_of_this_event, history_start_of_this_event, event_times, history_start_times, sortres, dist, idx, skip)
+    knn_point!(
+        tree,
+        point,
+        exclusion_windows_of_this_event,
+        exclusion_windows,
+        sortres,
+        dist,
+        idx,
+        skip,
+    )
     return idx, dist
 end
 
-function knn(tree::NNTree{V}, point::AbstractMatrix{T}, k::Int, sortres=false, skip::Function=always_false) where {V, T <: Number}
+function knn(
+    tree::NNTree{V},
+    point::AbstractMatrix{T},
+    k::Int,
+    sortres = false,
+    skip::Function = always_false,
+) where {V,T<:Number}
     dim = size(point, 1)
     npoints = size(point, 2)
     if isbitstype(T)
         new_data = copy_svec(T, point, Val(dim))
     else
-        new_data = SVector{dim,T}[SVector{dim,T}(point[:, i]) for i in 1:npoints]
+        new_data = SVector{dim,T}[SVector{dim,T}(point[:, i]) for i = 1:npoints]
     end
     knn(tree, new_data, k, sortres, skip)
 end

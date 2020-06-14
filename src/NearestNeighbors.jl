@@ -18,7 +18,7 @@ export Euclidean,
 
 # Change this to enable debugging
 const DEBUG = false
-"test"
+
 abstract type NNTree{V <: AbstractVector,P <: Metric} end
 
 const MinkowskiMetric = Union{Euclidean,Chebyshev,Cityblock,Minkowski}

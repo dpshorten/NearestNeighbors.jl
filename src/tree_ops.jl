@@ -9,7 +9,7 @@ function show(io::IO, tree::NNTree{V}) where {V}
     println(io, "  Number of points: ", length(tree.data))
     println(io, "  Dimensions: ", length(V))
     println(io, "  Metric: ", tree.metric)
-    print(io,   "  Reordered: ", tree.reordered)
+    print(io, "  Reordered: ", tree.reordered)
 end
 
 # We split the tree such that one of the sub trees has exactly 2^p points
@@ -33,16 +33,16 @@ function find_split(low, leafsize, n_p)
     if n_p <= 2 * leafsize
         mid_idx = leafsize
 
-    # The last leaf node will be in the right sub tree -> fill the left
-    # sub tree with
+        # The last leaf node will be in the right sub tree -> fill the left
+        # sub tree with
     elseif rest > 2^(k - 1) # Last node over the "half line" in the row
         mid_idx = 2^k * leafsize
 
-    # Perfectly filling both sub trees -> half to left and right sub tree
+        # Perfectly filling both sub trees -> half to left and right sub tree
     elseif rest == 0
         mid_idx = 2^(k - 1) * leafsize
 
-    # Else we fill the right sub tree -> send the rest to the left sub tree
+        # Else we fill the right sub tree -> send the rest to the left sub tree
     else
         mid_idx = n_p - 2^(k - 1) * leafsize
     end
@@ -71,14 +71,20 @@ end
 # Returns a range over the points in a leaf node with a given index
 @inline function get_leaf_range(td::TreeData, index)
     p_index = point_index(index, td)
-    n_p =  n_ps(index, td)
-    return p_index:p_index + n_p - 1
+    n_p = n_ps(index, td)
+    return p_index:p_index+n_p-1
 end
 
 # Store all the points in a leaf node continuously in memory in data_reordered to improve cache locality.
 # Also stores the mapping to get the index into the original data from the reordered data.
-function reorder_data!(data_reordered::Vector{V}, data::Vector{V}, index::Int,
-                         indices::Vector{Int}, indices_reordered::Vector{Int}, tree_data::TreeData) where {V}
+function reorder_data!(
+    data_reordered::Vector{V},
+    data::Vector{V},
+    index::Int,
+    indices::Vector{Int},
+    indices_reordered::Vector{Int},
+    tree_data::TreeData,
+) where {V}
 
     for i in get_leaf_range(tree_data, index)
         idx = indices[i]
@@ -90,22 +96,42 @@ end
 
 # Checks the distance function and add those points that are among the k best.
 # Uses a heap for fast insertion.
-@inline function add_points_knn!(best_dists::Vector, best_idxs::Vector{Int},
-                                 tree::NNTree, index::Int, point::AbstractVector,
-                                 time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                                 event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
-                                 do_end::Bool, skip::F) where {F}
+@inline function add_points_knn!(
+    best_dists::Vector,
+    best_idxs::Vector{Int},
+    tree::NNTree,
+    index::Int,
+    point::AbstractVector,
+    exclusion_windows_of_this_event,
+    exclusion_windows,
+    do_end::Bool,
+    skip::F,
+) where {F}
     for z in get_leaf_range(tree.tree_data, index)
         @POINT 1
         idx = tree.reordered ? z : tree.indices[z]
         dist_d = evaluate(tree.metric, tree.data[idx], point, do_end)
         # <David Shorten> add check that the histories do not overlap
-        if (dist_d <= best_dists[1]) &&
-            !((event_times[idx] >= history_start_of_this_event - 1e-9) && (history_start_times[idx] <= time_of_this_event + 1e-9))
-            #if abs(event_times[idx] - time_of_this_event) < 6.0
-             #   println("wowzer")
-            #end
-            
+        if (dist_d <= best_dists[1])
+            excluded = false
+            for i = 1:size(exclusion_windows_of_this_event, 1)
+                if !excluded
+                    for j = 1:size(exclusion_windows, 1)
+                        if (
+                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1] - 1e-4) &&
+                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2] + 1e-4)
+                        )
+                        excluded = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            if excluded
+                continue
+            end
+
             if skip(tree.indices[z])
                 continue
             end
@@ -123,17 +149,45 @@ end
 # stop computing the distance function as soon as we reach the desired radius.
 # This will probably prevent SIMD and other optimizations so some care is needed
 # to evaluate if it is worth it.
-@inline function add_points_inrange!(idx_in_ball::Vector{Int}, tree::NNTree,
-                                     index::Int, point::AbstractVector,
-                                     time_of_this_event::AbstractFloat, history_start_of_this_event::AbstractFloat,
-                                     event_times::Vector{<:AbstractFloat}, history_start_times::Vector{<:AbstractFloat},
-                                     r::Number, do_end::Bool)
+@inline function add_points_inrange!(
+    idx_in_ball::Vector{Int},
+    tree::NNTree,
+    index::Int,
+    point::AbstractVector,
+    exclusion_windows_of_this_event,
+    exclusion_windows,
+    r::Number,
+    do_end::Bool,
+)
+
+    #println(size(exclusion_windows_of_this_event), " ", size(exclusion_windows))
+    #println(exclusion_windows_of_this_event)
+    #exit()
+
     for z in get_leaf_range(tree.tree_data, index)
         @POINT 1
         idx = tree.reordered ? z : tree.indices[z]
         dist_d = evaluate(tree.metric, tree.data[idx], point, do_end)
-        if (dist_d <= r) &&
-            !((event_times[idx] >= history_start_of_this_event - 1e-9) && (history_start_times[idx] <= time_of_this_event + 1e-9))
+        if (dist_d <= r)
+            excluded = false
+            for i = 1:size(exclusion_windows_of_this_event, 1)
+                if !excluded
+                    for j = 1:size(exclusion_windows, 1)
+                        if (
+                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1] - 1e-4) &&
+                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2] + 1e-4)
+                        )
+                            excluded = true
+                            break
+                        end
+                    end
+                end
+            end
+
+            if excluded
+                continue
+            end
+
             #println("less")
             push!(idx_in_ball, idx)
         end

@@ -118,8 +118,8 @@ end
                 if !excluded
                     for j = 1:size(exclusion_windows, 1)
                         if (
-                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1] - 1e-4) &&
-                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2] + 1e-4)
+                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1]) &&
+                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2])
                         )
                         excluded = true
                             break
@@ -174,8 +174,8 @@ end
                 if !excluded
                     for j = 1:size(exclusion_windows, 1)
                         if (
-                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1] - 1e-4) &&
-                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2] + 1e-4)
+                            (exclusion_windows[j, 2, idx] >= exclusion_windows_of_this_event[i, 1]) &&
+                            (exclusion_windows[j, 1, idx] <= exclusion_windows_of_this_event[i, 2])
                         )
                             excluded = true
                             break
